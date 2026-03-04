@@ -1450,10 +1450,34 @@ public final class WinUIBackend: AppBackend {
         window: Window?,
         resultHandler handleResult: @escaping (DialogResult<[URL]>) -> Void
     ) {
-        let picker = FileOpenPicker()
-
         let window = window ?? windows[0]
         let hwnd = window.getHWND()!
+
+        // Use FolderPicker when selecting directories only
+        if openDialogOptions.allowSelectingDirectories && !openDialogOptions.allowSelectingFiles {
+            let picker = FolderPicker()
+            let interface: SwiftIInitializeWithWindow = try! picker.thisPtr.QueryInterface()
+            try! interface.initialize(with: hwnd)
+            picker.fileTypeFilter.append("*")
+
+            let promise = try! picker.pickSingleFolderAsync()!
+            promise.completed = { operation, status in
+                guard
+                    status == .completed,
+                    let operation,
+                    let result = try? operation.getResults()
+                else {
+                    handleResult(.cancelled)
+                    return
+                }
+
+                let folder = URL(fileURLWithPath: result.path)
+                handleResult(.success([folder]))
+            }
+            return
+        }
+
+        let picker = FileOpenPicker()
         let interface: SwiftIInitializeWithWindow = try! picker.thisPtr.QueryInterface()
         try! interface.initialize(with: hwnd)
 
